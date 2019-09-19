@@ -115,7 +115,7 @@ describe('ReactSuspenseWithNoopRenderer', () => {
     function Foo() {
       Scheduler.unstable_yieldValue('Foo');
       return (
-        <React.Fragment>
+        <>
           <Suspense fallback={<Text text="Loading..." />}>
             <Bar>
               <AsyncText text="A" ms={100} />
@@ -124,7 +124,7 @@ describe('ReactSuspenseWithNoopRenderer', () => {
           </Suspense>
           <Text text="C" />
           <Text text="D" />
-        </React.Fragment>
+        </>
       );
     }
 
@@ -494,7 +494,7 @@ describe('ReactSuspenseWithNoopRenderer', () => {
         return <Text text="(empty)" />;
       }
       return (
-        <Suspense>
+        <Suspense fallback="Loading...">
           <AsyncText ms={2000} text="Async" />
         </Suspense>
       );
@@ -516,6 +516,71 @@ describe('ReactSuspenseWithNoopRenderer', () => {
       '(empty)',
     ]);
     expect(ReactNoop.getChildren()).toEqual([span('(empty)')]);
+  });
+
+  it('tries each subsequent level after suspending', async () => {
+    const root = ReactNoop.createRoot();
+
+    function App({step, shouldSuspend}) {
+      return (
+        <Suspense fallback="Loading...">
+          <Text text="Sibling" />
+          {shouldSuspend ? (
+            <AsyncText ms={10000} text={'Step ' + step} />
+          ) : (
+            <Text text={'Step ' + step} />
+          )}
+        </Suspense>
+      );
+    }
+
+    function interrupt() {
+      // React has a heuristic to batch all updates that occur within the same
+      // event. This is a trick to circumvent that heuristic.
+      ReactNoop.flushSync(() => {
+        ReactNoop.renderToRootWithID(null, 'other-root');
+      });
+    }
+
+    // Mount the Suspense boundary without suspending, so that the subsequent
+    // updates suspend with a delay.
+    await ReactNoop.act(async () => {
+      root.render(<App step={0} shouldSuspend={false} />);
+    });
+    await advanceTimers(1000);
+    expect(Scheduler).toHaveYielded(['Sibling', 'Step 0']);
+
+    // Schedule an update at several distinct expiration times
+    await ReactNoop.act(async () => {
+      root.render(<App step={1} shouldSuspend={true} />);
+      Scheduler.unstable_advanceTime(1000);
+      expect(Scheduler).toFlushAndYieldThrough(['Sibling']);
+      interrupt();
+
+      root.render(<App step={2} shouldSuspend={true} />);
+      Scheduler.unstable_advanceTime(1000);
+      expect(Scheduler).toFlushAndYieldThrough(['Sibling']);
+      interrupt();
+
+      root.render(<App step={3} shouldSuspend={true} />);
+      Scheduler.unstable_advanceTime(1000);
+      expect(Scheduler).toFlushAndYieldThrough(['Sibling']);
+      interrupt();
+
+      root.render(<App step={4} shouldSuspend={false} />);
+    });
+
+    // Should suspend at each distinct level
+    expect(Scheduler).toHaveYielded([
+      'Sibling',
+      'Suspend! [Step 1]',
+      'Sibling',
+      'Suspend! [Step 2]',
+      'Sibling',
+      'Suspend! [Step 3]',
+      'Sibling',
+      'Step 4',
+    ]);
   });
 
   it('forces an expiration after an update times out', async () => {
@@ -729,18 +794,18 @@ describe('ReactSuspenseWithNoopRenderer', () => {
 
   it('resolves successfully even if fallback render is pending', async () => {
     ReactNoop.render(
-      <React.Fragment>
+      <>
         <Suspense fallback={<Text text="Loading..." />} />
-      </React.Fragment>,
+      </>,
     );
     expect(Scheduler).toFlushAndYield([]);
     expect(ReactNoop.getChildren()).toEqual([]);
     ReactNoop.render(
-      <React.Fragment>
+      <>
         <Suspense fallback={<Text text="Loading..." />}>
           <AsyncText text="Async" ms={3000} />
         </Suspense>
-      </React.Fragment>,
+      </>,
     );
     expect(ReactNoop.flushNextYield()).toEqual(['Suspend! [Async]']);
     await advanceTimers(1500);
@@ -965,11 +1030,11 @@ describe('ReactSuspenseWithNoopRenderer', () => {
 
     expect(Scheduler).toFlushAndYield(['A', 'B', 'C']);
     expect(ReactNoop).toMatchRenderedOutput(
-      <React.Fragment>
+      <>
         <span prop="A" />
         <span prop="B" />
         <span prop="C" />
-      </React.Fragment>,
+      </>,
     );
   });
 
@@ -1037,10 +1102,10 @@ describe('ReactSuspenseWithNoopRenderer', () => {
       ]);
       expect(Scheduler).toFlushExpired(['Step: 1']);
       expect(ReactNoop).toMatchRenderedOutput(
-        <React.Fragment>
+        <>
           <span prop="Step: 1" />
           <span prop="Sibling" />
-        </React.Fragment>,
+        </>,
       );
 
       // Update.
@@ -1056,23 +1121,23 @@ describe('ReactSuspenseWithNoopRenderer', () => {
         'Update did commit',
       ]);
       expect(ReactNoop).toMatchRenderedOutput(
-        <React.Fragment>
+        <>
           <span hidden={true} prop="Step: 1" />
           <span hidden={true} prop="Sibling" />
           <span prop="Loading (1)" />
           <span prop="Loading (2)" />
           <span prop="Loading (3)" />
-        </React.Fragment>,
+        </>,
       );
 
       await advanceTimers(100);
       expect(Scheduler).toHaveYielded(['Promise resolved [Step: 2]']);
       expect(Scheduler).toFlushExpired(['Step: 2']);
       expect(ReactNoop).toMatchRenderedOutput(
-        <React.Fragment>
+        <>
           <span prop="Step: 2" />
           <span prop="Sibling" />
-        </React.Fragment>,
+        </>,
       );
     });
 
@@ -1128,12 +1193,12 @@ describe('ReactSuspenseWithNoopRenderer', () => {
         'Commit root',
       ]);
       expect(ReactNoop).toMatchRenderedOutput(
-        <React.Fragment>
+        <>
           <span hidden={true} prop="A" />
           <span hidden={true} prop="C" />
 
           <span prop="Loading..." />
-        </React.Fragment>,
+        </>,
       );
 
       ReactNoop.expire(1000);
@@ -1142,11 +1207,11 @@ describe('ReactSuspenseWithNoopRenderer', () => {
       expect(Scheduler).toHaveYielded(['Promise resolved [B]']);
       expect(Scheduler).toFlushExpired(['B']);
       expect(ReactNoop).toMatchRenderedOutput(
-        <React.Fragment>
+        <>
           <span prop="A" />
           <span prop="B" />
           <span prop="C" />
-        </React.Fragment>,
+        </>,
       );
     });
 
@@ -1273,10 +1338,10 @@ describe('ReactSuspenseWithNoopRenderer', () => {
           'Suspend! [Hi]',
           'Loading...',
           // The child should have already been hidden
-          <React.Fragment>
+          <>
             <span hidden={true} />
             <span prop="Loading..." />
-          </React.Fragment>,
+          </>,
         ]);
 
         await advanceTimers(1000);
@@ -1400,11 +1465,11 @@ describe('ReactSuspenseWithNoopRenderer', () => {
       'Commit root',
     ]);
     expect(ReactNoop).toMatchRenderedOutput(
-      <React.Fragment>
+      <>
         <span hidden={true} prop="A" />
         <span hidden={true} prop="C" />
         <span prop="Loading..." />
-      </React.Fragment>,
+      </>,
     );
   });
 
