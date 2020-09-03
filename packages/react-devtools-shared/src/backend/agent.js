@@ -7,7 +7,7 @@
  * @flow
  */
 
-import EventEmitter from 'events';
+import EventEmitter from '../events';
 import throttle from 'lodash.throttle';
 import {
   SESSION_STORAGE_LAST_SELECTION_KEY,
@@ -55,6 +55,19 @@ type ElementAndRendererID = {|
   rendererID: number,
 |};
 
+type StoreAsGlobalParams = {|
+  count: number,
+  id: number,
+  path: Array<string | number>,
+  rendererID: number,
+|};
+
+type CopyElementParams = {|
+  id: number,
+  path: Array<string | number>,
+  rendererID: number,
+|};
+
 type InspectElementParams = {|
   id: number,
   path?: Array<string | number>,
@@ -96,7 +109,7 @@ export default class Agent extends EventEmitter<{|
   _bridge: BackendBridge;
   _isProfiling: boolean = false;
   _recordChangeDescriptions: boolean = false;
-  _rendererInterfaces: {[key: RendererID]: RendererInterface} = {};
+  _rendererInterfaces: {[key: RendererID]: RendererInterface, ...} = {};
   _persistedSelection: PersistedSelection | null = null;
   _persistedSelectionMatch: PathMatch | null = null;
   _traceUpdatesEnabled: boolean = false;
@@ -126,6 +139,7 @@ export default class Agent extends EventEmitter<{|
 
     this._bridge = bridge;
 
+    bridge.addListener('copyElementPath', this.copyElementPath);
     bridge.addListener('getProfilingData', this.getProfilingData);
     bridge.addListener('getProfilingStatus', this.getProfilingStatus);
     bridge.addListener('getOwnersList', this.getOwnersList);
@@ -140,16 +154,18 @@ export default class Agent extends EventEmitter<{|
     bridge.addListener('setTraceUpdatesEnabled', this.setTraceUpdatesEnabled);
     bridge.addListener('startProfiling', this.startProfiling);
     bridge.addListener('stopProfiling', this.stopProfiling);
+    bridge.addListener('storeAsGlobal', this.storeAsGlobal);
     bridge.addListener(
       'syncSelectionFromNativeElementsPanel',
       this.syncSelectionFromNativeElementsPanel,
     );
     bridge.addListener('shutdown', this.shutdown);
     bridge.addListener(
-      'updateAppendComponentStack',
-      this.updateAppendComponentStack,
+      'updateConsolePatchSettings',
+      this.updateConsolePatchSettings,
     );
     bridge.addListener('updateComponentFilters', this.updateComponentFilters);
+    bridge.addListener('viewAttributeSource', this.viewAttributeSource);
     bridge.addListener('viewElementSource', this.viewElementSource);
 
     if (this._isProfiling) {
@@ -169,9 +185,18 @@ export default class Agent extends EventEmitter<{|
     setupTraceUpdates(this);
   }
 
-  get rendererInterfaces(): {[key: RendererID]: RendererInterface} {
+  get rendererInterfaces(): {[key: RendererID]: RendererInterface, ...} {
     return this._rendererInterfaces;
   }
+
+  copyElementPath = ({id, path, rendererID}: CopyElementParams) => {
+    const renderer = this._rendererInterfaces[rendererID];
+    if (renderer == null) {
+      console.warn(`Invalid renderer id "${rendererID}" for element "${id}"`);
+    } else {
+      renderer.copyElementPath(id, path);
+    }
+  };
 
   getInstanceAndStyle({
     id,
@@ -186,7 +211,7 @@ export default class Agent extends EventEmitter<{|
   }
 
   getIDForNode(node: Object): number | null {
-    for (let rendererID in this._rendererInterfaces) {
+    for (const rendererID in this._rendererInterfaces) {
       const renderer = ((this._rendererInterfaces[
         (rendererID: any)
       ]: any): RendererInterface);
@@ -364,7 +389,7 @@ export default class Agent extends EventEmitter<{|
 
     setTraceUpdatesEnabled(traceUpdatesEnabled);
 
-    for (let rendererID in this._rendererInterfaces) {
+    for (const rendererID in this._rendererInterfaces) {
       const renderer = ((this._rendererInterfaces[
         (rendererID: any)
       ]: any): RendererInterface);
@@ -388,7 +413,7 @@ export default class Agent extends EventEmitter<{|
   startProfiling = (recordChangeDescriptions: boolean) => {
     this._recordChangeDescriptions = recordChangeDescriptions;
     this._isProfiling = true;
-    for (let rendererID in this._rendererInterfaces) {
+    for (const rendererID in this._rendererInterfaces) {
       const renderer = ((this._rendererInterfaces[
         (rendererID: any)
       ]: any): RendererInterface);
@@ -400,7 +425,7 @@ export default class Agent extends EventEmitter<{|
   stopProfiling = () => {
     this._isProfiling = false;
     this._recordChangeDescriptions = false;
-    for (let rendererID in this._rendererInterfaces) {
+    for (const rendererID in this._rendererInterfaces) {
       const renderer = ((this._rendererInterfaces[
         (rendererID: any)
       ]: any): RendererInterface);
@@ -409,24 +434,48 @@ export default class Agent extends EventEmitter<{|
     this._bridge.send('profilingStatus', this._isProfiling);
   };
 
-  updateAppendComponentStack = (appendComponentStack: boolean) => {
+  storeAsGlobal = ({count, id, path, rendererID}: StoreAsGlobalParams) => {
+    const renderer = this._rendererInterfaces[rendererID];
+    if (renderer == null) {
+      console.warn(`Invalid renderer id "${rendererID}" for element "${id}"`);
+    } else {
+      renderer.storeAsGlobal(id, path, count);
+    }
+  };
+
+  updateConsolePatchSettings = ({
+    appendComponentStack,
+    breakOnConsoleErrors,
+  }: {|
+    appendComponentStack: boolean,
+    breakOnConsoleErrors: boolean,
+  |}) => {
     // If the frontend preference has change,
     // or in the case of React Native- if the backend is just finding out the preference-
     // then install or uninstall the console overrides.
     // It's safe to call these methods multiple times, so we don't need to worry about that.
-    if (appendComponentStack) {
-      patchConsole();
+    if (appendComponentStack || breakOnConsoleErrors) {
+      patchConsole({appendComponentStack, breakOnConsoleErrors});
     } else {
       unpatchConsole();
     }
   };
 
   updateComponentFilters = (componentFilters: Array<ComponentFilter>) => {
-    for (let rendererID in this._rendererInterfaces) {
+    for (const rendererID in this._rendererInterfaces) {
       const renderer = ((this._rendererInterfaces[
         (rendererID: any)
       ]: any): RendererInterface);
       renderer.updateComponentFilters(componentFilters);
+    }
+  };
+
+  viewAttributeSource = ({id, path, rendererID}: CopyElementParams) => {
+    const renderer = this._rendererInterfaces[rendererID];
+    if (renderer == null) {
+      console.warn(`Invalid renderer id "${rendererID}" for element "${id}"`);
+    } else {
+      renderer.prepareViewAttributeSource(id, path);
     }
   };
 

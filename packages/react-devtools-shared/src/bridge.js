@@ -7,7 +7,7 @@
  * @flow
  */
 
-import EventEmitter from 'events';
+import EventEmitter from './events';
 
 import type {ComponentFilter, Wall} from './types';
 import type {
@@ -51,9 +51,25 @@ type OverrideSuspense = {|
   forceFallback: boolean,
 |};
 
+type CopyElementPathParams = {|
+  ...ElementAndRendererID,
+  path: Array<string | number>,
+|};
+
+type ViewAttributeSourceParams = {|
+  ...ElementAndRendererID,
+  path: Array<string | number>,
+|};
+
 type InspectElementParams = {|
   ...ElementAndRendererID,
   path?: Array<string | number>,
+|};
+
+type StoreAsGlobalParams = {|
+  ...ElementAndRendererID,
+  count: number,
+  path: Array<string | number>,
 |};
 
 type NativeStyleEditor_RenameAttributeParams = {|
@@ -67,6 +83,11 @@ type NativeStyleEditor_SetValueParams = {|
   ...ElementAndRendererID,
   name: string,
   value: string,
+|};
+
+type UpdateConsolePatchSettingsParams = {|
+  appendComponentStack: boolean,
+  breakOnConsoleErrors: boolean,
 |};
 
 type BackendEvents = {|
@@ -95,6 +116,7 @@ type BackendEvents = {|
 
 type FrontendEvents = {|
   clearNativeElementHighlight: [],
+  copyElementPath: [CopyElementPathParams],
   getOwnersList: [ElementAndRendererID],
   getProfilingData: [{|rendererID: RendererID|}],
   getProfilingStatus: [],
@@ -115,8 +137,10 @@ type FrontendEvents = {|
   startProfiling: [boolean],
   stopInspectingNative: [boolean],
   stopProfiling: [],
-  updateAppendComponentStack: [boolean],
+  storeAsGlobal: [StoreAsGlobalParams],
   updateComponentFilters: [Array<ComponentFilter>],
+  updateConsolePatchSettings: [UpdateConsolePatchSettingsParams],
+  viewAttributeSource: [ViewAttributeSourceParams],
   viewElementSource: [ElementAndRendererID],
 
   // React Native style editor plug-in.

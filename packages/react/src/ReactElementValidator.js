@@ -12,7 +12,6 @@
  * that support it.
  */
 
-import lowPriorityWarningWithoutStack from 'shared/lowPriorityWarningWithoutStack';
 import isValidElementType from 'shared/isValidElementType';
 import getComponentName from 'shared/getComponentName';
 import {
@@ -22,9 +21,8 @@ import {
   REACT_FRAGMENT_TYPE,
   REACT_ELEMENT_TYPE,
 } from 'shared/ReactSymbols';
-import checkPropTypes from 'prop-types/checkPropTypes';
-import warning from 'shared/warning';
-import warningWithoutStack from 'shared/warningWithoutStack';
+import {warnAboutSpreadingKeyToJSX} from 'shared/ReactFeatureFlags';
+import checkPropTypes from 'shared/checkPropTypes';
 
 import ReactCurrentOwner from './ReactCurrentOwner';
 import {
@@ -33,9 +31,24 @@ import {
   cloneElement,
   jsxDEV,
 } from './ReactElement';
-import ReactDebugCurrentFrame, {
-  setCurrentlyValidatingElement,
-} from './ReactDebugCurrentFrame';
+import {setExtraStackFrame} from './ReactDebugCurrentFrame';
+import {describeUnknownElementTypeFrameInDEV} from 'shared/ReactComponentStackFrame';
+
+function setCurrentlyValidatingElement(element) {
+  if (__DEV__) {
+    if (element) {
+      const owner = element._owner;
+      const stack = describeUnknownElementTypeFrameInDEV(
+        element.type,
+        element._source,
+        owner ? owner.type : null,
+      );
+      setExtraStackFrame(stack);
+    } else {
+      setExtraStackFrame(null);
+    }
+  }
+}
 
 let propTypesMisspellWarningShown;
 
@@ -131,17 +144,16 @@ function validateExplicitKey(element, parentType) {
     )}.`;
   }
 
-  setCurrentlyValidatingElement(element);
   if (__DEV__) {
-    warning(
-      false,
+    setCurrentlyValidatingElement(element);
+    console.error(
       'Each child in a list should have a unique "key" prop.' +
-        '%s%s See https://fb.me/react-warning-keys for more information.',
+        '%s%s See https://reactjs.org/link/warning-keys for more information.',
       currentComponentErrorInfo,
       childOwner,
     );
+    setCurrentlyValidatingElement(null);
   }
-  setCurrentlyValidatingElement(null);
 }
 
 /**
@@ -215,26 +227,19 @@ function validatePropTypes(element) {
       return;
     }
     if (propTypes) {
-      setCurrentlyValidatingElement(element);
-      checkPropTypes(
-        propTypes,
-        element.props,
-        'prop',
-        name,
-        ReactDebugCurrentFrame.getStackAddendum,
-      );
-      setCurrentlyValidatingElement(null);
+      checkPropTypes(propTypes, element.props, 'prop', name, element);
     } else if (type.PropTypes !== undefined && !propTypesMisspellWarningShown) {
       propTypesMisspellWarningShown = true;
-      warningWithoutStack(
-        false,
+      console.error(
         'Component %s declared `PropTypes` instead of `propTypes`. Did you misspell the property assignment?',
         name || 'Unknown',
       );
     }
-    if (typeof type.getDefaultProps === 'function') {
-      warningWithoutStack(
-        type.getDefaultProps.isReactClassApproved,
+    if (
+      typeof type.getDefaultProps === 'function' &&
+      !type.getDefaultProps.isReactClassApproved
+    ) {
+      console.error(
         'getDefaultProps is only used on classic React.createClass ' +
           'definitions. Use a static property named `defaultProps` instead.',
       );
@@ -248,27 +253,26 @@ function validatePropTypes(element) {
  */
 function validateFragmentProps(fragment) {
   if (__DEV__) {
-    setCurrentlyValidatingElement(fragment);
-
     const keys = Object.keys(fragment.props);
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i];
       if (key !== 'children' && key !== 'key') {
-        warning(
-          false,
+        setCurrentlyValidatingElement(fragment);
+        console.error(
           'Invalid prop `%s` supplied to `React.Fragment`. ' +
             'React.Fragment can only have `key` and `children` props.',
           key,
         );
+        setCurrentlyValidatingElement(null);
         break;
       }
     }
 
     if (fragment.ref !== null) {
-      warning(false, 'Invalid attribute `ref` supplied to `React.Fragment`.');
+      setCurrentlyValidatingElement(fragment);
+      console.error('Invalid attribute `ref` supplied to `React.Fragment`.');
+      setCurrentlyValidatingElement(null);
     }
-
-    setCurrentlyValidatingElement(null);
   }
 }
 
@@ -318,8 +322,7 @@ export function jsxWithValidation(
     }
 
     if (__DEV__) {
-      warning(
-        false,
+      console.error(
         'React.jsx: type is invalid -- expected a string (for ' +
           'built-in components) or a class/function (for composite ' +
           'components) but got: %s.%s',
@@ -357,8 +360,7 @@ export function jsxWithValidation(
           }
         } else {
           if (__DEV__) {
-            warning(
-              false,
+            console.error(
               'React.jsx: Static children should always be an array. ' +
                 'You are likely explicitly calling React.jsxs or React.jsxDEV. ' +
                 'Use the Babel transform instead.',
@@ -371,14 +373,16 @@ export function jsxWithValidation(
     }
   }
 
-  if (hasOwnProperty.call(props, 'key')) {
-    if (__DEV__) {
-      warning(
-        false,
-        'React.jsx: Spreading a key to JSX is a deprecated pattern. ' +
-          'Explicitly pass a key after spreading props in your JSX call. ' +
-          'E.g. <ComponentName {...props} key={key} />',
-      );
+  if (__DEV__) {
+    if (warnAboutSpreadingKeyToJSX) {
+      if (hasOwnProperty.call(props, 'key')) {
+        console.error(
+          'React.jsx: Spreading a key to JSX is a deprecated pattern. ' +
+            'Explicitly pass a key after spreading props in your JSX call. ' +
+            'E.g. <%s {...props} key={key} />',
+          getComponentName(type) || 'ComponentName',
+        );
+      }
     }
   }
 
@@ -442,8 +446,7 @@ export function createElementWithValidation(type, props, children) {
     }
 
     if (__DEV__) {
-      warning(
-        false,
+      console.error(
         'React.createElement: type is invalid -- expected a string (for ' +
           'built-in components) or a class/function (for composite ' +
           'components) but got: %s.%s',
@@ -481,16 +484,25 @@ export function createElementWithValidation(type, props, children) {
   return element;
 }
 
+let didWarnAboutDeprecatedCreateFactory = false;
+
 export function createFactoryWithValidation(type) {
   const validatedFactory = createElementWithValidation.bind(null, type);
   validatedFactory.type = type;
-  // Legacy hook: remove it
   if (__DEV__) {
+    if (!didWarnAboutDeprecatedCreateFactory) {
+      didWarnAboutDeprecatedCreateFactory = true;
+      console.warn(
+        'React.createFactory() is deprecated and will be removed in ' +
+          'a future major release. Consider using JSX ' +
+          'or use React.createElement() directly instead.',
+      );
+    }
+    // Legacy hook: remove it
     Object.defineProperty(validatedFactory, 'type', {
       enumerable: false,
       get: function() {
-        lowPriorityWarningWithoutStack(
-          false,
+        console.warn(
           'Factory.type is deprecated. Access the class directly ' +
             'before passing it to createFactory.',
         );
