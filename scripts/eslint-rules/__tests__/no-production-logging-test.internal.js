@@ -18,28 +18,35 @@ ruleTester.run('no-production-logging', rule, {
     {
       code: `
         if (__DEV__) {
-          warning(test, 'Oh no');
+          console.error('Oh no');
         }
       `,
     },
     {
       code: `
         if (__DEV__) {
-          warningWithoutStack(test, 'Oh no');
+          console.error('Hello %s', foo)
         }
       `,
     },
     {
       code: `
         if (__DEV__) {
-          lowPriorityWarning(test, 'Oh no');
+          console.error('Hello %s %s', foo, bar)
         }
       `,
     },
     {
       code: `
         if (__DEV__) {
-          lowPriorityWarningWithoutStack(test, 'Oh no');
+          console.warn('Oh no');
+        }
+      `,
+    },
+    {
+      code: `
+        if (__DEV__) {
+          console.warn('Oh no');
         }
       `,
     },
@@ -49,7 +56,7 @@ ruleTester.run('no-production-logging', rule, {
         if (__DEV__) {
           if (potato) {
             while (true) {
-              warning(test, 'Oh no');
+              console.error('Oh no');
             }
           }
         }`,
@@ -61,7 +68,7 @@ ruleTester.run('no-production-logging', rule, {
           f = function() {
             if (potato) {
               while (true) {
-                warning(test, 'Oh no');
+                console.error('Oh no');
               }
             }
           };
@@ -88,116 +95,130 @@ ruleTester.run('no-production-logging', rule, {
           if (foo) {
             if (__DEV__) {
             } else {
-              warning(test, 'Oh no');
+              console.error('Oh no');
             }
           }
         }`,
     },
+    {
+      // This is an escape hatch that makes it fire in production.
+      code: `
+        console['error']('Oh no');
+      `,
+    },
   ],
   invalid: [
     {
-      code: 'warning(test);',
+      code: "console.error('Oh no');",
+      output: "if (__DEV__) {console.error('Oh no')};",
       errors: [
         {
-          message: `Wrap warning() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.error() in an "if (__DEV__) {}" check`,
         },
       ],
     },
     {
-      code: 'warningWithoutStack(test)',
+      code: "console.warn('Oh no');",
+      output: "if (__DEV__) {console.warn('Oh no')};",
       errors: [
         {
-          message: `Wrap warningWithoutStack() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.warn() in an "if (__DEV__) {}" check`,
         },
       ],
     },
     {
-      code: `
-        if (potato) {
-          warningWithoutStack(test);
-        }
-      `,
+      code: "console.warn('Oh no')",
+      output: "if (__DEV__) {console.warn('Oh no')}",
       errors: [
         {
-          message: `Wrap warningWithoutStack() in an "if (__DEV__) {}" check`,
-        },
-      ],
-    },
-    {
-      code: 'lowPriorityWarning(test);',
-      errors: [
-        {
-          message: `Wrap lowPriorityWarning() in an "if (__DEV__) {}" check`,
-        },
-      ],
-    },
-    {
-      code: 'lowPriorityWarningWithoutStack(test)',
-      errors: [
-        {
-          message: `Wrap lowPriorityWarningWithoutStack() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.warn() in an "if (__DEV__) {}" check`,
         },
       ],
     },
     {
       code: `
         if (potato) {
-          lowPriorityWarningWithoutStack(test);
+          console.warn('Oh no');
+        }
+      `,
+      output: `
+        if (potato) {
+          if (__DEV__) {console.warn('Oh no')};
         }
       `,
       errors: [
         {
-          message: `Wrap lowPriorityWarningWithoutStack() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.warn() in an "if (__DEV__) {}" check`,
         },
       ],
     },
     {
       code: `
         if (__DEV__ || potato && true) {
-          warning(test);
+          console.error('Oh no');
+        }
+      `,
+      output: `
+        if (__DEV__ || potato && true) {
+          if (__DEV__) {console.error('Oh no')};
         }
       `,
       errors: [
         {
-          message: `Wrap warning() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.error() in an "if (__DEV__) {}" check`,
         },
       ],
     },
     {
       code: `
         if (banana && __DEV__ && potato && kitten) {
-          warning(test);
+          console.error('Oh no');
+        }
+      `,
+      output: `
+        if (banana && __DEV__ && potato && kitten) {
+          if (__DEV__) {console.error('Oh no')};
         }
       `,
       // Technically this code is valid but we prefer
       // explicit standalone __DEV__ blocks that stand out.
       errors: [
         {
-          message: `Wrap warning() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.error() in an "if (__DEV__) {}" check`,
         },
       ],
     },
     {
       code: `
         if (!__DEV__) {
-          warning(test);
+          console.error('Oh no');
+        }
+      `,
+      output: `
+        if (!__DEV__) {
+          if (__DEV__) {console.error('Oh no')};
         }
       `,
       errors: [
         {
-          message: `Wrap warning() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.error() in an "if (__DEV__) {}" check`,
         },
       ],
     },
     {
       code: `
         if (foo || x && __DEV__) {
-          warning(test);
+          console.error('Oh no');
+        }
+      `,
+      output: `
+        if (foo || x && __DEV__) {
+          if (__DEV__) {console.error('Oh no')};
         }
       `,
       errors: [
         {
-          message: `Wrap warning() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.error() in an "if (__DEV__) {}" check`,
         },
       ],
     },
@@ -205,12 +226,18 @@ ruleTester.run('no-production-logging', rule, {
       code: `
         if (__DEV__) {
         } else {
-          warning(test);
+          console.error('Oh no');
+        }
+      `,
+      output: `
+        if (__DEV__) {
+        } else {
+          if (__DEV__) {console.error('Oh no')};
         }
       `,
       errors: [
         {
-          message: `Wrap warning() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.error() in an "if (__DEV__) {}" check`,
         },
       ],
     },
@@ -220,13 +247,46 @@ ruleTester.run('no-production-logging', rule, {
         } else {
           if (__DEV__) {
           } else {
-            warning(test);
+            console.error('Oh no');
+          }
+        }
+      `,
+      output: `
+        if (__DEV__) {
+        } else {
+          if (__DEV__) {
+          } else {
+            if (__DEV__) {console.error('Oh no')};
           }
         }
       `,
       errors: [
         {
-          message: `Wrap warning() in an "if (__DEV__) {}" check`,
+          message: `Wrap console.error() in an "if (__DEV__) {}" check`,
+        },
+      ],
+    },
+    {
+      code: `
+        if (__DEV__) {
+          console.log('Oh no');
+        }
+      `,
+      errors: [
+        {
+          message: 'Unexpected use of console',
+        },
+      ],
+    },
+    {
+      code: `
+        if (__DEV__) {
+          console.log.apply(console, 'Oh no');
+        }
+      `,
+      errors: [
+        {
+          message: 'Unexpected use of console',
         },
       ],
     },

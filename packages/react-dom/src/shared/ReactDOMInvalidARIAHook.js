@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import warning from 'shared/warning';
-
 import {ATTRIBUTE_NAME_CHAR} from './DOMProperty';
 import isCustomComponent from './isCustomComponent';
 import validAriaProperties from './validAriaProperties';
@@ -32,8 +30,7 @@ function validateProperty(tagName, name) {
       // If this is an aria-* attribute, but is not listed in the known DOM
       // DOM properties, then it is an invalid aria-* attribute.
       if (correctName == null) {
-        warning(
-          false,
+        console.error(
           'Invalid ARIA attribute `%s`. ARIA attributes follow the pattern aria-* and must be lowercase.',
           name,
         );
@@ -42,8 +39,7 @@ function validateProperty(tagName, name) {
       }
       // aria-* attributes should be lowercase; suggest the lowercase version.
       if (name !== correctName) {
-        warning(
-          false,
+        console.error(
           'Invalid ARIA attribute `%s`. Did you mean `%s`?',
           name,
           correctName,
@@ -67,8 +63,7 @@ function validateProperty(tagName, name) {
       }
       // aria-* attributes should be lowercase; suggest the lowercase version.
       if (name !== standardName) {
-        warning(
-          false,
+        console.error(
           'Unknown ARIA attribute `%s`. Did you mean `%s`?',
           name,
           standardName,
@@ -98,18 +93,16 @@ function warnInvalidARIAProps(type, props) {
       .join(', ');
 
     if (invalidProps.length === 1) {
-      warning(
-        false,
+      console.error(
         'Invalid aria prop %s on <%s> tag. ' +
-          'For details, see https://fb.me/invalid-aria-prop',
+          'For details, see https://reactjs.org/link/invalid-aria-props',
         unknownPropString,
         type,
       );
     } else if (invalidProps.length > 1) {
-      warning(
-        false,
+      console.error(
         'Invalid aria props %s on <%s> tag. ' +
-          'For details, see https://fb.me/invalid-aria-prop',
+          'For details, see https://reactjs.org/link/invalid-aria-props',
         unknownPropString,
         type,
       );

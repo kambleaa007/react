@@ -10,9 +10,6 @@ import {shorthandToLonghand} from './CSSShorthandProperty';
 import dangerousStyleValue from './dangerousStyleValue';
 import hyphenateStyleName from './hyphenateStyleName';
 import warnValidStyle from './warnValidStyle';
-import warning from 'shared/warning';
-
-import {warnAboutShorthandPropertyCollision} from 'shared/ReactFeatureFlags';
 
 /**
  * Operations for dealing with CSS properties.
@@ -129,10 +126,6 @@ export function validateShorthandPropertyCollisionInDev(
   nextStyles,
 ) {
   if (__DEV__) {
-    if (!warnAboutShorthandPropertyCollision) {
-      return;
-    }
-
     if (!nextStyles) {
       return;
     }
@@ -149,8 +142,7 @@ export function validateShorthandPropertyCollisionInDev(
           continue;
         }
         warnedAbout[warningKey] = true;
-        warning(
-          false,
+        console.error(
           '%s a style property during rerender (%s) when a ' +
             'conflicting property is set (%s) can lead to styling bugs. To ' +
             "avoid this, don't mix shorthand and non-shorthand properties " +
