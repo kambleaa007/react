@@ -134,5 +134,5 @@
     "merge-fork": "node ./scripts/merge-fork/merge-fork.js",
     "replace-fork": "node ./scripts/merge-fork/replace-fork.js"
   },
-  "version": "v1.15.2"
+  "version": "1.22.4"
 }
